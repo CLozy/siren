@@ -30,108 +30,132 @@ The agent will then output the playlist_url to the user.
 
 """  # siren.py
 
-from datetime import date, datetime
+from datetime import date
+import random
+import streamlit as st
+
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
+
+# Spotify Credentials
+SPOTIFY_CLIENT_ID = "08531c05d5e74350ad75acf3ee7db841"
+SPOTIFY_CLIENT_SECRET = "20a86fc5aa31437386ad0b252af2d5e4"
+REDIRECT_URI = "http://127.0.0.1:8501/callback"
+
+# Initialize Spotipy (you might want to do this globally or within the function)
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIFY_CLIENT_ID,
+                                               client_secret=SPOTIFY_CLIENT_SECRET,
+                                               redirect_uri=REDIRECT_URI,
+                                               scope="user-read-private playlist-read-collaborative playlist-modify-public"))
+
+# Initialize session state for storing chat history
+if 'chat_history' not in st.session_state:
+    st.session_state['chat_history'] = []
+
+def display_chat_message(role, content):
+    with st.chat_message(role):
+        st.markdown(content)
+
+def get_cycle_start_date_from_chat():
+    display_chat_message("assistant", "Hello! When was the first day of your last period?")
+    start_date = st.date_input("Select the start date")
+    if start_date:
+        today = date.today()
+        if start_date > today:
+            display_chat_message("assistant", "Hmm, that date seems to be in the future. Could you double-check?")
+            return None
+        else:
+            display_chat_message("user", start_date.strftime("%Y-%m-%d")) # Display selected date in chat
+            return start_date
+    return None
 
 
-def get_cycle_info():
-    "Accepts user input for the start date of the last period, and typical duration of the period."
-    while True:
-        start_date_str = input("Enter the first day of your last period (YYYY-MM-DD): ")
-        try:
-            cycle_start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            today = date.today()  # Get the current date dynamically
-
-            if cycle_start_date > today:
-                print("The start date cannot be in the future. Please enter a valid past or current date.")
-            else:
-                break
-        except ValueError:
-            print("Invalid date format. Please use YYYY-MM-DD.")
-
-
-    while True:
-        duration_str = input("Enter the typical duration of your period in days (e.g., 5): ")
+def get_period_duration_from_chat():
+    display_chat_message("assistant", "Got it. And how many days does your period typically last?")
+    duration_str = st.chat_input("Your answer (in days)")
+    if duration_str:
         try:
             period_duration = int(duration_str)
             if period_duration > 0:
-                return cycle_start_date, period_duration
+                display_chat_message("user", duration_str)
+                return period_duration
             else:
-                print("Period duration must be a positive number.")
+                display_chat_message("assistant", "Period duration must be a positive number.")
+                return None
         except ValueError:
-            print("Invalid input. Please enter a number for the duration.")
+            display_chat_message("assistant", "Invalid input. Please enter a number.")
+            return None
+    return None
 
 
-# def calculate_cycle_day(last_period_date):
-#     """
-#     Calculate the current cycle day based on the last period start date.
-#     """
-#     today = date.today()
-#     delta = today - last_period_date
-#     return delta.days + 1  # Cycle day starts at 1
+def calculate_cycle_day(cycle_start_date):
+    """Calculate the current cycle day based on the cycle start date."""
+    today = date.today()  # Dynamically get the current date
+    delta = today - cycle_start_date
+    return delta.days + 1
+
+
+def get_cycle_phase(cycle_day, period_duration):
+    """Determines the current cycle phase based on the cycle day and period duration."""
+    if 1 <= cycle_day <= period_duration:
+        return "Menstruation"
+    elif period_duration < cycle_day <= 13:  # Assuming average follicular phase length
+        return "Follicular"
+    elif 14 <= cycle_day <= 16:             # Assuming average ovulation window
+        return "Ovulation"
+    elif 17 <= cycle_day:                   # Any day 17 or later will be considered Luteal
+        return "Luteal"
+    else:
+        return "Unknown" # This should ideally not be reached with valid positive cycle days
+
+
+def map_phase_to_mood(cycle_phase):
+    mood_map = {
+        "Menstruation": ["Blue", "Cranky", "Depressed", "Emotional", "Irritated", "Lazy", "Sad", "Sleepy", "Stressed"],
+        "Follicular": ["Calm", "Confident", "Excited", "Happy", "Naughty", "Peaceful", "Romantic", "Sexy", "Unfocused"],
+        "Ovulation": ["Confident", "Excited", "Happy", "Naughty", "Romantic", "Sexy"],
+        "Luteal": ["Angry", "Anxious", "Confused", "Craving", "Frustrated", "Forgetful", "Irritated", "Jealous", "Stressed", "Emotional"],
+        "Unknown": ["General"]
+    }
+    # Randomly select one mood from the list for the given phase
+    return random.choice(mood_map.get(cycle_phase, ["General"]))
 
 
 
-# def get_cycle_phase(cycle_day):
-#     """
-#     Determine the cycle phase based on the current cycle day.
-#     """
-#     if 1 <= cycle_day <= 5:
-#         return "Menstruation"
-#     elif 6 <= cycle_day <= 13:
-#         return "Follicular"
-#     elif 14 <= cycle_day <= 20:
-#         return "Ovulation"
-#     elif 21 <= cycle_day <= 28:
-#         return "Luteal"
-#     else:
-#         return "Unknown Phase"
-
-
-# def map_phase_to_mood(cycle_phase):
-#     """
-#     Map the cycle phase to a predicted mood or list of moods.
-#     """
-#     phase_to_mood = {
-#         "Menstruation": ["Tired", "Reflective"],
-#         "Follicular": ["Energetic", "Optimistic"],
-#         "Ovulation": ["Confident", "Social"],
-#         "Luteal": ["Irritable", "Introspective"]
-#     }
-#     return phase_to_mood.get(cycle_phase, "Unknown Mood")
-
-
-# def recommend_playlist(predicted_mood):
-#     """
-#     Recommend a Spotify playlist URL based on the predicted mood.
-#     """
-#     mood_to_playlist = {
-#         "Tired": "https://open.spotify.com/playlist/tired_playlist",
-#         "Reflective": "https://open.spotify.com/playlist/reflective_playlist",
-#         "Energetic": "https://open.spotify.com/playlist/energetic_playlist",
-#         "Optimistic": "https://open.spotify.com/playlist/optimistic_playlist",
-#         "Confident": "https://open.spotify.com/playlist/confident_playlist",
-#         "Social": "https://open.spotify.com/playlist/social_playlist",
-#         "Irritable": "https://open.spotify.com/playlist/irritable_playlist",
-#         "Introspective": "https://open.spotify.com/playlist/introspective_playlist"
-#     }
-#     if isinstance(predicted_mood, list):
-#         return [mood_to_playlist.get(mood, "https://open.spotify.com/playlist/default_playlist") for mood in predicted_mood]
-#     return mood_to_playlist.get(predicted_mood, "https://open.spotify.com/playlist/default_playlist")
-
-
+def recommend_playlist(predicted_mood):
+    """Dynamically searches Spotify for a playlist based on the predicted mood."""
+    try:
+        results = sp.search(q=predicted_mood + str(" playlist"), type='playlist', limit=1) # Search for one relevant playlist
+        print(results)
+        if results and 'playlists' in results and results['playlists'] and 'items' in results['playlists'] and results['playlists']['items']:
+            if results['playlists']['items'][0] and 'external_urls' in results['playlists']['items'][0] and 'spotify' in results['playlists']['items'][0]['external_urls']:
+                return results['playlists']['items'][0]['external_urls']['spotify']
+            else:
+                print(f"Warning: Could not extract Spotify URL for mood: {predicted_mood}")
+                return "https://open.spotify.com/"  # Fallback if URL is missing
+        else:
+            print(f"Warning: No playlists found for mood: {predicted_mood}")
+            return "https://open.spotify.com/"  # Fallback if no playlists found
+    except Exception as e:
+        print(f"Error searching Spotify: {e}")
+        return "https://open.spotify.com/"  # Fallback on error
+    
 
 if __name__ == "__main__":
-    print("Welcome to Siren - Your Cycle-Aware Music Companion!")
-    start_date, period_duration = get_cycle_info()
-    print(f"Your typical period duration is {period_duration} days.")
-    print(f"Your last period started on {start_date}.")
-    
-    # cycle_day = calculate_cycle_day(start_date)
-    # print(f"\nBased on your last period starting on {start_date}, today is day {cycle_day} of your cycle.")
+    st.title("Siren - Music That Understands Your Flow.")
 
-    # cycle_phase = get_cycle_phase(cycle_day, period_duration)
-    # predicted_mood = map_phase_to_mood(cycle_phase)
-    # playlist_link = recommend_playlist(predicted_mood)
+    cycle_start_date = get_cycle_start_date_from_chat()
+    period_duration = None
 
-    # print(f"Your predicted mood for the {cycle_phase} phase is: {predicted_mood}")
-    # print(f"Here's a Spotify playlist to match: {playlist_link}")
+    if cycle_start_date:
+        period_duration = get_period_duration_from_chat()
+
+    if cycle_start_date and period_duration:
+        cycle_day = calculate_cycle_day(cycle_start_date)
+        cycle_phase = get_cycle_phase(cycle_day, period_duration)
+        predicted_mood = map_phase_to_mood(cycle_phase)
+        playlist_link = recommend_playlist(predicted_mood)
+
+        st.subheader("Siren's Recommendation:")
+        display_chat_message("assistant", f"Based on your cycle, you are in the **{cycle_phase}** phase, and your predicted mood is **{predicted_mood}**.")
+        display_chat_message("assistant", f"Here's a Spotify playlist to match: [Listen on Spotify]({playlist_link})")

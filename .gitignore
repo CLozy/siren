@@ -1,4 +1,6 @@
 .env
 .DS_Store
 .idea
+.cache
 /siren_venv
+/__pycache__/
