@@ -36,16 +36,15 @@ import streamlit as st
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+from dotenv import load_dotenv
+import os
 
-# Spotify Credentials
-SPOTIFY_CLIENT_ID = "08531c05d5e74350ad75acf3ee7db841"
-SPOTIFY_CLIENT_SECRET = "20a86fc5aa31437386ad0b252af2d5e4"
-REDIRECT_URI = "http://127.0.0.1:8501/callback"
+load_dotenv()
 
 # Initialize Spotipy (you might want to do this globally or within the function)
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIFY_CLIENT_ID,
-                                               client_secret=SPOTIFY_CLIENT_SECRET,
-                                               redirect_uri=REDIRECT_URI,
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ.get("SPOTIPY_CLIENT_ID"),
+                                               client_secret=os.environ.get("SPOTIPY_CLIENT_SECRET"),
+                                               redirect_uri=os.environ.get("SPOTIPY_REDIRECT_URI"),
                                                scope="user-read-private playlist-read-collaborative playlist-modify-public"))
 
 # Initialize session state for storing chat history
